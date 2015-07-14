@@ -11,9 +11,21 @@ namespace Blinky
 {
     public sealed partial class MainPage : Page
     {
-        private const int LED_PIN = 5;
-        private GpioPin pin;
-        private GpioPinValue pinValue;
+        private const int GREEN_LED_PIN = 47;
+        private const int RED_LED_PIN = 35;
+        private const int GPIO5_PIN = 5;
+        private const int GPIO6_PIN = 6;
+        private const int GPIO13_PIN = 13;
+        private const int GPIO26_PIN = 26;
+        private readonly int[] pindefs = { GPIO5_PIN, GPIO6_PIN, GPIO13_PIN, GPIO26_PIN };
+
+        private int LEDStatus = 0;
+        private int counter = 0;
+
+        private GpioPin redPin;
+        private GpioPin greenPin;
+        private GpioPin[] pins;
+
         private DispatcherTimer timer;
         private SolidColorBrush redBrush = new SolidColorBrush(Windows.UI.Colors.Red);
         private SolidColorBrush grayBrush = new SolidColorBrush(Windows.UI.Colors.LightGray);
@@ -25,55 +37,116 @@ namespace Blinky
             timer = new DispatcherTimer();
             timer.Interval = TimeSpan.FromMilliseconds(500);
             timer.Tick += Timer_Tick;
-            InitGPIO();
-            if (pin != null)
+            if (InitGPIO())
             {
                 timer.Start();
-            }        
+            }
         }
 
-        private void InitGPIO()
+        private bool InitGPIO()
         {
             var gpio = GpioController.GetDefault();
 
             // Show an error if there is no GPIO controller
             if (gpio == null)
             {
-                pin = null;
                 GpioStatus.Text = "There is no GPIO controller on this device.";
-                return;
+                return false;
             }
 
-            pin = gpio.OpenPin(LED_PIN);
-            pinValue = GpioPinValue.High;
-            pin.Write(pinValue);
-            pin.SetDriveMode(GpioPinDriveMode.Output);
+            this.redPin = gpio.OpenPin(RED_LED_PIN);
+            this.greenPin = gpio.OpenPin(GREEN_LED_PIN);
 
-            GpioStatus.Text = "GPIO pin initialized correctly.";
+            this.greenPin.Write(GpioPinValue.High);
+            this.redPin.Write(GpioPinValue.Low);
+            this.redPin.SetDriveMode(GpioPinDriveMode.Output);
+            this.greenPin.SetDriveMode(GpioPinDriveMode.Output);
 
+            // initialize the output led pins to default to high
+            this.pins = new GpioPin[this.pindefs.Length];
+
+            for (int i = 0; i < this.pindefs.Length; i++)
+            {
+                this.pins[i] = gpio.OpenPin(this.pindefs[i]);
+                this.pins[i].Write(GpioPinValue.High);
+                this.pins[i].SetDriveMode(GpioPinDriveMode.Output);
+            }
+
+            GpioStatus.Text = "GPIO pins initialized correctly.";
+
+            return true;
         }
 
-   
-
-
-
-
-        private void Timer_Tick(object sender, object e)
+        private void FlipLED()
         {
-            if (pinValue == GpioPinValue.High)
+            if (this.LEDStatus == 0)
             {
-                pinValue = GpioPinValue.Low;
-                pin.Write(pinValue);
+                this.LEDStatus = 1;
+                if (this.greenPin != null)
+                {
+                    // to turn on the LED, we need to push the pin 'low'
+                    this.greenPin.Write(GpioPinValue.Low);
+                }
+                if (this.redPin != null)
+                {
+                    // to turn off the LED, we need to push the pin 'high'
+                    this.redPin.Write(GpioPinValue.High);
+                }
                 LED.Fill = redBrush;
             }
             else
             {
-                pinValue = GpioPinValue.High;
-                pin.Write(pinValue);
+                LEDStatus = 0;
+                if (this.greenPin != null)
+                {
+                    // to turn off the LED, we need to push the pin 'high'
+                    this.greenPin.Write(GpioPinValue.High);
+                }
+                if (this.redPin != null)
+                {
+                    // to turn on the LED, we need to push the pin 'low'
+                    this.redPin.Write(GpioPinValue.Low);
+                }
                 LED.Fill = grayBrush;
             }
-        }
-             
 
+            // turn off current LED, and drive next LED low
+            this.pins[counter].Write(GpioPinValue.High);
+            this.counter = (this.counter + 1) % this.pins.Length;
+            this.pins[counter].Write(GpioPinValue.Low);
+        }
+
+        private void TurnOffLED()
+        {
+            if (LEDStatus == 1)
+            {
+                FlipLED();
+            }
+        }
+
+        private void Timer_Tick(object sender, object e)
+        {
+            FlipLED();
+        }
+
+        private void Delay_ValueChanged(object sender, RangeBaseValueChangedEventArgs e)
+        {
+            if (timer == null)
+            {
+                return;
+            }
+            if (e.NewValue == Delay.Minimum)
+            {
+                DelayText.Text = "Stopped";
+                timer.Stop();
+                TurnOffLED();
+            }
+            else
+            {
+                DelayText.Text = e.NewValue + "ms";
+                timer.Interval = TimeSpan.FromMilliseconds(e.NewValue);
+                timer.Start();
+            }
+        }
     }
 }
