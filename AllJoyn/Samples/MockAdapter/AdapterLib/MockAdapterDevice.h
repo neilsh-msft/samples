@@ -18,6 +18,7 @@
 
 #include "AdapterDefinitions.h"
 #include "MockDevices.h"
+#include "MockAdapter.h"
 
 namespace AdapterLib
 {
@@ -92,9 +93,9 @@ namespace AdapterLib
             Platform::String^ get() { return this->interfaceHint; }
         }
 
-        virtual property Platform::Object^ Parent
+        virtual property BridgeRT::IAdapterDevice^ Parent
         {
-            Platform::Object^ get() { return this->parent; }
+            BridgeRT::IAdapterDevice^ get() { return this->parent; }
         }
 
         // Attributes
@@ -107,8 +108,9 @@ namespace AdapterLib
         }
 
     internal:
-        MockAdapterProperty::MockAdapterProperty(Platform::String^ Name, Platform::Object^ ParentObject);
-        MockAdapterProperty(const MOCK_PROPERTY_DESCRIPTOR* MockPropertyDescPtr, Platform::Object^ ParentObject);
+
+        MockAdapterProperty(Platform::String^ Name, BridgeRT::IAdapterDevice^ ParentObject);
+        MockAdapterProperty(const MOCK_PROPERTY_DESCRIPTOR* MockPropertyDescPtr, BridgeRT::IAdapterDevice^ ParentObject);
         MockAdapterProperty(const MockAdapterProperty^ Other);
 
         uint32 Set(BridgeRT::IAdapterProperty^ Other);
@@ -123,7 +125,8 @@ namespace AdapterLib
         // Generic
         Platform::String^ name;
         Platform::String^ interfaceHint;
-        Platform::Object^ parent;
+        BridgeRT::IAdapterDevice^ parent;
+
 
         const MOCK_PROPERTY_DESCRIPTOR* mockDescPtr;
 
@@ -394,9 +397,9 @@ namespace AdapterLib
         {
             Platform::String^ get() { return this->name; }
         }
-        virtual property Platform::Object^ Parent
+        virtual property BridgeRT::IAdapter^ Parent
         {
-            Platform::Object^ get() { return this->parent; }
+            BridgeRT::IAdapter^ get() { return this->parent; }
         }
 
         //
@@ -491,10 +494,12 @@ namespace AdapterLib
             }
         }
 
-    internal:
-        MockAdapterDevice(Platform::String^ Name, Platform::Object^ ParentObject);
-        MockAdapterDevice(const MOCK_DEVICE_DESCRIPTOR* MockDeviceDescPtr, Platform::Object^ ParentObject);
+        virtual ~MockAdapterDevice();
 
+    internal:
+        MockAdapterDevice(Platform::String^ Name, AdapterLib::MockAdapter^ ParentObject);
+        MockAdapterDevice(const MOCK_DEVICE_DESCRIPTOR* MockDeviceDescPtr, MockAdapter^ ParentObject);
+        
         void AddProperty(_In_ BridgeRT::IAdapterProperty^ NewProperty);
         void AddMethod(_In_ BridgeRT::IAdapterMethod^ NewMethod);
         void AddSignal(_In_ BridgeRT::IAdapterSignal^ NewSignal);
@@ -535,11 +540,12 @@ namespace AdapterLib
         void createSignals();
 
         void methodReset(_Inout_ BridgeRT::IAdapterMethod^ Method);
+        void heartbeatTimerElapsed(Windows::System::Threading::ThreadPoolTimer^ timer);
 
     private:
         // Generic
         Platform::String^ name;
-        Platform::Object^ parent;
+        MockAdapter^ parent;
 
         // Device information
         Platform::String^ vendor;
@@ -553,7 +559,7 @@ namespace AdapterLib
         BridgeRT::IAdapterIcon^ icon;
 
         // Sync object
-        DsbCommon::CSLock lock;
+        std::recursive_mutex lock;
 
         // Device properties
         std::vector<BridgeRT::IAdapterProperty^> properties;
@@ -563,6 +569,9 @@ namespace AdapterLib
 
         // Device signals
         std::vector<BridgeRT::IAdapterSignal^> signals;
+
+        // Timer for heartbeat signal
+        Windows::System::Threading::ThreadPoolTimer^ heartbeatTimer;
     };
 
 } // namespace AdapterLib

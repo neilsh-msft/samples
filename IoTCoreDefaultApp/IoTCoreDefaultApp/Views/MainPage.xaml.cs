@@ -1,9 +1,8 @@
 ﻿// Copyright (c) Microsoft. All rights reserved.
 
-using IoTOnboardingService;
+using IoTCoreDefaultApp.Utils;
 using System;
 using System.Globalization;
-using System.Threading.Tasks;
 using Windows.Networking.Connectivity;
 using Windows.Storage;
 using Windows.System;
@@ -17,21 +16,35 @@ namespace IoTCoreDefaultApp
 {
     public sealed partial class MainPage : Page
     {
+        public static MainPage Current;
         private CoreDispatcher MainPageDispatcher;
         private DispatcherTimer timer;
         private ConnectedDevicePresenter connectedDevicePresenter;
-        private OnboardingService OnboardingService;
 
-            
+        public CoreDispatcher UIThreadDispatcher
+        {
+            get
+            {
+                return MainPageDispatcher;
+            }
+
+            set
+            {
+                MainPageDispatcher = value;
+            }
+        }
+
         public MainPage()
         {
             this.InitializeComponent();
 
+            // This is a static public property that allows downstream pages to get a handle to the MainPage instance
+            // in order to call methods that are in this class.
+            Current = this;
+
             MainPageDispatcher = Window.Current.Dispatcher;
 
             NetworkInformation.NetworkStatusChanged += NetworkInformation_NetworkStatusChanged;
-
-            OnboardingService = new OnboardingService();
 
             this.NavigationCacheMode = NavigationCacheMode.Enabled;
 
@@ -46,7 +59,7 @@ namespace IoTCoreDefaultApp
 
                 timer = new DispatcherTimer();
                 timer.Tick += timer_Tick;
-                timer.Interval = TimeSpan.FromSeconds(30);
+                timer.Interval = TimeSpan.FromSeconds(10);
                 timer.Start();
             };
             this.Unloaded += (sender, e) =>
@@ -62,8 +75,6 @@ namespace IoTCoreDefaultApp
             {
                 ApplicationData.Current.LocalSettings.Values[Constants.HasDoneOOBEKey] = Constants.HasDoneOOBEValue;
             }
-
-            Task.Run(() => OnboardingService.Start());
 
             base.OnNavigatedTo(e);
         }
@@ -104,8 +115,12 @@ namespace IoTCoreDefaultApp
 
         private void UpdateDateTime()
         {
-            var t = DateTime.Now;
-            this.CurrentTime.Text = t.ToString("t", CultureInfo.CurrentCulture);
+            // Using DateTime.Now is simpler, but the time zone is cached. So, we use a native method insead.
+            SYSTEMTIME localTime;
+            NativeTimeMethods.GetLocalTime(out localTime);
+
+            DateTime t = localTime.ToDateTime();
+            CurrentTime.Text = t.ToString("t", CultureInfo.CurrentCulture) + Environment.NewLine + t.ToString("d", CultureInfo.CurrentCulture);
         }
 
         private async void UpdateNetworkInfo()
@@ -127,6 +142,11 @@ namespace IoTCoreDefaultApp
             ShutdownDropdown.IsOpen = true;
         }
 
+        private void CommandLineButton_Clicked(object sender, RoutedEventArgs e)
+        {
+            NavigationUtils.NavigateToScreen(typeof(CommandLinePage));
+        }
+
         private void SettingsButton_Clicked(object sender, RoutedEventArgs e)
         {
             NavigationUtils.NavigateToScreen(typeof(Settings));
@@ -139,7 +159,10 @@ namespace IoTCoreDefaultApp
 
         private void ShutdownHelper(ShutdownKind kind)
         {
-            ShutdownManager.BeginShutdown(kind, TimeSpan.FromSeconds(0.5));
+            new System.Threading.Tasks.Task(() =>
+            {
+                ShutdownManager.BeginShutdown(kind, TimeSpan.FromSeconds(0));
+            }).Start();
         }
 
         private void ShutdownListView_ItemClick(object sender, ItemClickEventArgs e)

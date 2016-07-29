@@ -19,6 +19,7 @@
 #include "MockAdapterDevice.h"
 #include "MockDevices.h"
 #include "BfiDefinitions.h"
+#include "BridgeUtils.h"
 
 using namespace Platform;
 using namespace Platform::Collections;
@@ -26,9 +27,10 @@ using namespace Windows::Foundation;
 using namespace Windows::Foundation::Collections;
 using namespace Windows::Storage::Streams;
 using namespace Windows::Storage::FileProperties;
+using namespace Windows::System::Threading;
 
 using namespace BridgeRT;
-using namespace DsbCommon;
+
 
 namespace AdapterLib
 {
@@ -78,7 +80,8 @@ namespace AdapterLib
     // Description:
     //  The class that implements BridgeRT::IAdapterProperty.
     //
-    MockAdapterProperty::MockAdapterProperty(String^ Name, Object^ ParentObject)
+  
+    MockAdapterProperty::MockAdapterProperty(String^ Name, BridgeRT::IAdapterDevice^ ParentObject) 
         : name(Name)
         , parent(ParentObject)
         , mockDescPtr(nullptr)
@@ -87,12 +90,14 @@ namespace AdapterLib
         // Used only for signature spec
     }
 
-    MockAdapterProperty::MockAdapterProperty(const MOCK_PROPERTY_DESCRIPTOR* MockPropertyDescPtr, Object^ ParentObject)
+    MockAdapterProperty::MockAdapterProperty(const MOCK_PROPERTY_DESCRIPTOR* MockPropertyDescPtr, BridgeRT::IAdapterDevice^ ParentObject)
         : parent(ParentObject)
         , name(MockPropertyDescPtr->Name)
         , mockDescPtr(MockPropertyDescPtr)
     {
-        std::wstring wszIfName = cAdapterPrefix + L"." + cAdapterName + L"." + MockPropertyDescPtr->InterfaceHint->Data();
+        MockAdapterDevice^ adapterDevice = dynamic_cast<MockAdapterDevice^>(ParentObject);
+        std::wstring adapterPrefix(adapterDevice->Parent->ExposedAdapterPrefix->Data());
+        std::wstring wszIfName = adapterPrefix + L"." + cAdapterName + L"." + MockPropertyDescPtr->InterfaceHint->Data();
         interfaceHint = ref new String(wszIfName.c_str());
         (void)this->Reset();
     }
@@ -391,7 +396,7 @@ namespace AdapterLib
     // Description:
     //  The class that implements BridgeRT::IAdapterDevice.
     //
-    MockAdapterDevice::MockAdapterDevice(Platform::String^ Name, Platform::Object^ ParentObject)
+    MockAdapterDevice::MockAdapterDevice(Platform::String^ Name, MockAdapter^ ParentObject)
         : name(Name)
         , parent(ParentObject)
     {
@@ -402,7 +407,7 @@ namespace AdapterLib
     }
 
 
-    MockAdapterDevice::MockAdapterDevice(const MOCK_DEVICE_DESCRIPTOR* MockDeviceDescPtr, Object^ ParentObject)
+    MockAdapterDevice::MockAdapterDevice(const MOCK_DEVICE_DESCRIPTOR* MockDeviceDescPtr, MockAdapter^ ParentObject)
         : parent(ParentObject)
         , name(MockDeviceDescPtr->Name)
         , vendor(MockDeviceDescPtr->VendorName)
@@ -447,6 +452,12 @@ namespace AdapterLib
             icon = ref new MockAdapterIcon(file);
         }).wait();
 
+    }
+
+
+    MockAdapterDevice::~MockAdapterDevice()
+    {
+        this->heartbeatTimer->Cancel();
     }
 
 
@@ -500,7 +511,7 @@ namespace AdapterLib
         // Prepare signal...
         //
 
-        AutoLock sync(&this->lock, true);
+        AutoLock sync(this->lock);
 
         if (targetSignal->Name == Constants::CHANGE_OF_VALUE_SIGNAL)
         {
@@ -607,6 +618,23 @@ namespace AdapterLib
 
             this->signals.push_back(std::move(signal));
         }
+
+        // Heartbeat signal
+        {
+            MockAdapterSignal^ signal = ref new MockAdapterSignal(HEARTBEAT_SIGNAL, this);
+            this->signals.push_back(std::move(signal));
+
+            // Fire the timer every 5s
+            this->heartbeatTimer = ThreadPoolTimer::CreatePeriodicTimer(
+                ref new TimerElapsedHandler(this, &MockAdapterDevice::heartbeatTimerElapsed), TimeSpan{ 50000000L });
+        }
+    }
+    
+
+    void
+    MockAdapterDevice::heartbeatTimerElapsed(ThreadPoolTimer^ timer)
+    {
+        this->SendSignal(HEARTBEAT_SIGNAL, nullptr, nullptr);
     }
 
 

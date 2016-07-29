@@ -4,21 +4,19 @@
 
 To install your appx on an IoT device please do the following:
 
-1. Edit variable setup for AppInstall.bat.
-	- Set defaultappx = your appx's file name
-	- Set certslist = your appx's certificate's name. You can add multiple certificates, separate by a space.
+1. Edit AppxConfig.cmd
+	- Set AppxName = your appx's file name (Name only. No need for .appx extension)
+	- Set certslist = your appx's certificate's name. (Name only. No need for .cer extension. You can delimit mutliple certificates with a space.)
+	- Set dependencylist = your appx's dependency names. (Name only. No need for .cer extension. You can delimit mutliple certificates with a space.)
+	- Set forceinstall = "0" if you want to install only newer versions and "1" if you want to force install (uninstalls existing version and installs). Default is "0"
+    - Set launchapp=` "1" if you want to set the app as default app and launch , "0" if you just want to install only. Default is "1"
 
-2. Edit variable setup for DeployApp.bat
-	- Set defaultappx = your appx's file name
-	- Set defaultappxid = your appx's Id
-	- Set dependencylist = your appx's dependency names. You can add multiple dependency names, separate by a space.
-
-3. Place your files in the followind directories:
-	- c:\windows\appinstall: Your Appx, Dependency Appx(s), Temp appx (optional), Certificat(s), AppInstall.bat , DeployApp.bat 
+3. Place your files in the following directories:
+	- c:\AppInstall: Your Appx, Dependency Appx(s), Certificate(s), all .cmd files in this directory except OEMCustomization.cmd
 	- c:\windows\system32: OemCustomization.cmd
 		
     You can do this by either:    
-    - Wrapping the binaries in an OEM Package and include it when you create the image with ICD/Imggen. [TODO: Add link to MSDN doc once live]
+    - Wrapping the binaries in an OEM Package and include it when you create the image with ICD/Imggen. See .pkg.xml file.
     - Manually copy the files over to disk.
     
 4. Restart the device and your appx will be automatically installed on boot.

@@ -6,7 +6,6 @@ using System.Globalization;
 using Windows.UI.Core;
 using Windows.UI.Xaml;
 using Windows.UI.Xaml.Controls;
-using Windows.UI.Xaml.Input;
 
 // The Blank Page item template is documented at http://go.microsoft.com/fwlink/?LinkId=234238
 
@@ -101,7 +100,8 @@ namespace IoTCoreDefaultApp
 
         private async void NextButton_Clicked(object sender, RoutedEventArgs e)
         {
-            var wifiAvailable = NetworkPresenter.WifiIsAvailable();
+            var networkPresenter = new NetworkPresenter();
+            var wifiAvailable = networkPresenter.WifiIsAvailable();
             SetPreferences();
             Type nextScreen;
 
